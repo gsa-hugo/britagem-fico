@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#232322">
+<title>Britagem de Agregados · Painel de Operação e Manutenção · GSA Service</title>
+<link rel="icon" href="assets/logo-color.png">
+<link rel="preload" href="assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/style.css?v=2">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side">
+    <div class="logo"><img src="assets/logo-white.png" alt="GSA Service"><small>Planta de Britagem · Contrato Vale</small></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot" id="sideFoot"></div>
+  </aside>
+  <div class="scrim" onclick="document.getElementById('app').classList.remove('open')"></div>
+  <div class="main">
+    <header class="top">
+      <button class="burger" aria-label="Menu" onclick="document.getElementById('app').classList.toggle('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="ttl"><h1 id="pgTitle">Visão Geral</h1><div class="sub" id="pgSub"></div></div>
+      <div class="filters" id="periodo"></div>
+      <button class="kbtn" id="btnBusca" aria-label="Buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span>Buscar</span><kbd>Ctrl K</kbd></button>
+    </header>
+    <main class="content" id="view"></main>
+    <footer class="ft"><span id="ftInfo"></span><span>Painel estático gerado a partir do controle diário de produção. Somente leitura. · <a href="#/metodo">Metodologia</a> · <a href="atualizar.html">Área de atualização</a></span></footer>
+  </div>
+  <nav class="bnav" id="bnav"></nav>
+</div>
+<script src="assets/echarts.min.js"></script>
+<script src="assets/equipamentos.js?v=2"></script>
+<script>
+  // dados.js com versão por minuto: evita que o navegador ou o GitHub Pages mostrem dados antigos
+  (function () {
+    function load(src, next) { var s = document.createElement('script'); s.src = src; s.onload = s.onerror = next; document.body.appendChild(s); }
+    load('dados/dados.js?v=' + Math.floor(Date.now() / 60000), function () { load('assets/app.js?v=2'); });
+  })();
+</script>
+</body>
+</html>
