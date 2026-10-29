@@ -191,12 +191,13 @@
     equip: '<path d="M4 17l5-10 4 6 3-4 4 8z"/><path d="M3 21h18"/>',
     semanal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
     eventos: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+    planta3d: '<path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12M3 7l9 5 9-5"/>',
     metodo: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>'
   };
   var ROTAS = [
     ['grp', 'Operação'], ['visao', 'Visão Geral', 'Desempenho do período contra o orçamento'], ['boletim', 'Boletim Diário', 'Linha do tempo e registros do dia operacional'],
     ['producao', 'Produção', 'Produtos, aproveitamento e curva S contratual'], ['semanal', 'Evolução Semanal', 'Indicadores consolidados por semana'],
-    ['grp', 'Manutenção'], ['paradas', 'Paradas e Disponibilidade', 'Pareto, classes, responsabilidade e confiabilidade'], ['equip', 'Equipamentos', 'Indicadores e ficha técnica por equipamento'],
+    ['grp', 'Manutenção'], ['paradas', 'Paradas e Disponibilidade', 'Pareto, classes, responsabilidade e confiabilidade'], ['equip', 'Equipamentos', 'Indicadores e ficha técnica por equipamento'], ['planta3d', 'Planta 3D', 'Modelo tridimensional navegável com indicadores por equipamento'],
     ['grp', 'Registros'], ['eventos', 'Registro de Eventos', 'Todos os apontamentos de operação e parada'], ['metodo', 'Metodologia', 'Premissas, definições e fonte dos dados']
   ];
   function navHtml(cur) {
@@ -241,8 +242,263 @@
     view.innerHTML = PREVIEW ? '<div class="note"><b>Modo prévia.</b> Você está vendo os dados carregados na área de atualização, ainda não publicados.</div>' : '';
     var holder = document.createElement('div'); view.appendChild(holder);
     window.scrollTo(0, 0);
-    ({ visao: pgVisao, boletim: pgBoletim, producao: pgProducao, semanal: pgSemanal, paradas: pgParadas, equip: pgEquip, equipamento: pgEquipamento, eventos: pgEventos, metodo: pgMetodo })[pg](holder, arg);
+    ({ visao: pgVisao, boletim: pgBoletim, producao: pgProducao, semanal: pgSemanal, paradas: pgParadas, equip: pgEquip, equipamento: pgEquipamento, planta3d: pgPlanta3d, eventos: pgEventos, metodo: pgMetodo })[pg](holder, arg);
   }
+
+  // =====================================================================
+  // PLANTA 3D (modelo Tekla do arranjo geral, carregado sob demanda)
+  // =====================================================================
+  var P3 = { cache: null, loading: null };
+  function carregaScripts(lista) {
+    return lista.reduce(function (p, src) {
+      return p.then(function () {
+        if (document.querySelector('script[data-src="' + src + '"]')) return;
+        return new Promise(function (ok, ko) { var s = document.createElement('script'); s.src = src; s.dataset.src = src; s.onload = ok; s.onerror = function () { ko(new Error(src)); }; document.head.appendChild(s); });
+      });
+    }, Promise.resolve());
+  }
+  function geometria3d() {
+    if (P3.cache) return Promise.resolve(P3.cache);
+    if (!P3.loading) P3.loading = carregaScripts(['assets/three.min.js', 'assets/OrbitControls.js', 'assets/planta3d.js']).then(function () {
+      var M = window.PLANTA3D, bin = atob(M.bin), n = bin.length, u8 = new Uint8Array(n);
+      for (var i = 0; i < n; i++) u8[i] = bin.charCodeAt(i);
+      var buf = u8.buffer, lo = M.lo, sc = M.sc;
+      var blocos = M.blocos.map(function (b) {
+        var q = new Uint16Array(buf, b.po, b.nv * 3), pos = new Float32Array(b.nv * 3);
+        for (var k = 0; k < b.nv * 3; k += 3) { pos[k] = lo[0] + q[k] * sc[0]; pos[k + 1] = lo[1] + q[k + 1] * sc[1]; pos[k + 2] = lo[2] + q[k + 2] * sc[2]; }
+        var g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        g.setIndex(new THREE.BufferAttribute(new Uint16Array(buf, b.io, b.ni), 1));
+        g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+        return { t: b.t, c: b.c, g: g, mn: b.mn, mx: b.mx };
+      });
+      delete M.bin;
+      P3.cache = { M: M, blocos: blocos };
+      return P3.cache;
+    });
+    return P3.loading;
+  }
+
+  function pgPlanta3d(root) {
+    var a = agrega(diasPeriodo()), evs = evPeriodo('T');
+    var ultimo = DIAS_OP[DIAS_OP.length - 1] || {};
+    var evUlt = EV.filter(function (e) { return e.d === S.fim && e.stop; });
+    var st = {}; EQ.ordem.forEach(function (t) { st[t] = statsEquip(t, a, evs); });
+    var modo = 'neutro';
+    root.innerHTML =
+      '<div class="p3d">' +
+      '<div class="p3-stage card"><div class="p3-bar">' + seg('p3modo', [['neutro', 'Neutro'], ['h', 'Horas paradas'], ['f', 'Falhas'], ['dia', 'Dia ' + dBRs(S.fim)]], 'neutro') +
+      '<div class="grow"></div><button class="btn-sm" id="p3rot">Rótulos</button><button class="btn-sm" id="p3home">Vista geral</button></div>' +
+      '<div class="p3-cv" id="p3cv"><div class="p3-load" id="p3load">Carregando o modelo da planta…</div><div class="p3-lbl" id="p3lbl"></div><div class="p3-leg" id="p3leg"></div></div></div>' +
+      '<aside class="p3-side card" id="p3side"></aside></div>' +
+      '<p class="hint" style="margin-top:12px">Modelo gerado a partir do arranjo geral em 3D (Tekla) da planta, com peças miúdas como parafusos simplificadas. O corpo do britador cônico e a unidade hidráulica UH 01 aparecem de forma esquemática, pois o arranjo traz apenas a base do britador e não localiza a UH. Arraste para girar, use a roda ou o gesto de pinça para aproximar e clique em um equipamento, transportador ou pilha para focar e ver seus indicadores no período.</p>';
+    var side = $('p3side'), cv = $('p3cv');
+    side.innerHTML = ladoGeral();
+    bindSeg(root, 'p3modo', function (v) { modo = v; if (V) V.colore(); });
+
+    var V = null;
+    geometria3d().then(function (G) { if (document.body.contains(cv)) V = montaCena(G); })
+      .catch(function () { $('p3load').textContent = 'Não foi possível carregar o modelo 3D (assets/planta3d.js).'; });
+
+    function valor(t) {
+      var s = st[t]; if (!s) return 0;
+      if (modo === 'h') return s.h; if (modo === 'f') return s.cf.falhas;
+      if (modo === 'dia') return sum(evUlt.filter(function (e) { return e.eq === t; }), function (e) { return e.h; });
+      return 0;
+    }
+    function ladoGeral() {
+      var l = EQ.ordem.filter(function (t) { return st[t] && st[t].h > 0 && t !== 'Geral'; }).sort(function (x, y) { return st[y].h - st[x].h; }).slice(0, 8);
+      var mx = Math.max.apply(null, l.map(function (t) { return st[t].h; }).concat([1]));
+      return '<h3>Planta de britagem</h3><div class="hint">' + dBR(S.ini) + ' a ' + dBR(S.fim) + '</div>' +
+        '<div class="p3-kv"><div><b>' + f0(a.las) + '</b> t de lastro</div><div><b>' + f1(a.hDia) + '</b> h/dia operando</div><div><b>' + f1(a.parP) + '</b> h paradas na primária</div><div><b>' + f1(a.parS) + '</b> h paradas na secundária</div></div>' +
+        '<h4>Maiores tempos de parada</h4>' + l.map(function (t) {
+          return '<a class="p3-row" href="javascript:void 0" data-t="' + esc(t) + '"><span>' + esc(t) + '</span><i><b style="width:' + (st[t].h / mx * 100) + '%"></b></i><em>' + f1(st[t].h) + ' h</em></a>';
+        }).join('') + '<p class="hint" style="margin-top:12px">Selecione um item no modelo ou nesta lista.</p>';
+    }
+    function ladoEquip(t) {
+      var s = st[t], ficha = EQ.fichas[t];
+      var dia = sum(evUlt.filter(function (e) { return e.eq === t; }), function (e) { return e.h; });
+      var ult = s.evs.slice().sort(function (x, y) { return (y.d + y.hi) < (x.d + x.hi) ? -1 : 1; }).slice(0, 4);
+      return '<div class="p3-h"><span class="tg">' + esc(t) + '</span><span class="tag neu">' + etapaNome(s.et) + '</span></div>' +
+        '<div style="font-weight:700;margin-top:6px">' + esc(tipoDe(t)) + '</div><div class="hint">' + esc(ficha ? ficha.modelo : (EQ.funcao[t] || '')) + '</div>' +
+        '<div class="p3-kpi"><div><b>' + f1(s.h) + '</b><span>h paradas</span></div><div><b>' + s.cf.falhas + '</b><span>falhas</span></div>' +
+        '<div><b>' + (s.cf.falhas ? f0(s.cf.mtbf) : '–') + '</b><span>MTBF (h)</span></div><div><b>' + (s.cf.falhas ? f1(s.cf.mttr) : '–') + '</b><span>MTTR (h)</span></div>' +
+        '<div><b>' + pc(s.cf.df) + '</b><span>disp. física</span></div><div><b>' + (dia ? f1(dia) : '0') + '</b><span>h paradas em ' + dBRs(S.fim) + '</span></div></div>' +
+        (ult.length ? '<h4>Últimas paradas no período</h4>' + ult.map(function (e) { return '<div class="p3-ev"><b>' + dBRs(e.d) + ' · ' + hm(e.h) + '</b> ' + esc(e.cls) + '<br><span>' + esc([e.sub, e.comp, e.det].filter(Boolean).join(' · ')).slice(0, 140) + '</span></div>'; }).join('') : '<p class="hint" style="margin-top:12px">Nenhuma parada registrada no período. O equipamento operou sem falhas.</p>') +
+        '<a class="btn-sm p3-go" href="#/equipamento/' + encodeURIComponent(t) + '">Abrir análise completa</a>';
+    }
+    function ladoPilha(nome) {
+      var k = (PRODS.filter(function (p) { return p[0] === nome; })[0] || [])[1];
+      var tot = k ? a[k] : (nome === 'Pilha Pulmão' ? a.ali : NaN);
+      var tc = { 'Bica Corrida': 'TC 12', 'Rachão': 'TC 04', 'Lastro': 'TC 05', 'Brita 2': 'TC 07', 'Brita 1': 'TC 08', 'Brita 0': 'TC 09', 'Pó de Brita': 'TC 10', 'Pilha Pulmão': 'TC 01' }[nome];
+      return '<div class="p3-h"><span class="tg">' + esc(nome) + '</span><span class="tag neu">Pilha</span></div>' +
+        '<div class="p3-kpi"><div><b>' + f0(tot) + '</b><span>t no período' + (nome === 'Pilha Pulmão' ? ' (alimentação)' : '') + '</span></div><div><b>' + f0(div(tot, a.n)) + '</b><span>t por dia apontado</span></div>' +
+        (k ? '<div><b>' + pc(div(a[k], sum(PRODS, function (p) { return a[p[1]]; }))) + '</b><span>do total produzido</span></div>' : '') + '</div>' +
+        (tc ? '<p class="hint" style="margin-top:12px">Formada pelo ' + tc + '.</p><a class="btn-sm p3-go" href="javascript:void 0" data-t="' + tc + '">Focar no ' + tc + '</a>' : '');
+    }
+
+    function montaCena(G) {
+      $('p3load').style.display = 'none';
+      var W = cv.clientWidth, H = cv.clientHeight;
+      var renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(W, H);
+      renderer.setClearColor(0xf3f2ee);
+      cv.insertBefore(renderer.domElement, cv.firstChild);
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0xf3f2ee, 260, 520);
+      var cam = new THREE.PerspectiveCamera(40, W / H, 0.5, 1500);
+      var ctl = new THREE.OrbitControls(cam, renderer.domElement);
+      ctl.enableDamping = true; ctl.dampingFactor = 0.09; ctl.maxPolarAngle = Math.PI * 0.495; ctl.minDistance = 4; ctl.maxDistance = 420;
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xb9b4a8, 0.75));
+      var sol = new THREE.DirectionalLight(0xffffff, 0.75); sol.position.set(-80, 160, 60); scene.add(sol);
+      var sol2 = new THREE.DirectionalLight(0xffffff, 0.25); sol2.position.set(120, 60, -90); scene.add(sol2);
+
+      // Tekla: Z para cima. three.js: Y para cima. (x, y, z) -> (x, z, -y)
+      var mundo = new THREE.Group(); mundo.rotation.x = -Math.PI / 2; scene.add(mundo);
+      function v3(p) { return new THREE.Vector3(p[0], p[2], -p[1]); }
+      var lo = G.M.lo, cx = 95, cy = 50;
+      var chao = new THREE.Mesh(new THREE.PlaneGeometry(420, 300), new THREE.MeshLambertMaterial({ color: 0xe6e2d9, transparent: true, opacity: 1 }));
+      chao.position.set(cx, cy, -0.02); mundo.add(chao);
+      var grade = new THREE.GridHelper(400, 40, 0xd3cec3, 0xdcd8ce); grade.rotation.x = Math.PI / 2; grade.position.set(cx, cy, 0.0); mundo.add(grade);
+
+      var PAL = { amarelo: 0xd2aa3c, escuro: 0x50504d, preto: 0x34342f, aco: 0xa6a6a0, aco2: 0x82827d, trelica: 0xbdbcb5 };
+      var meshes = [], porTag = {};
+      G.blocos.forEach(function (b) {
+        var m = new THREE.Mesh(b.g, new THREE.MeshStandardMaterial({ color: PAL[b.c] || 0x999999, roughness: 0.82, metalness: 0.08, flatShading: true, side: THREE.DoubleSide }));
+        m.userData = { t: b.t, cor: PAL[b.c] || 0x999999 };
+        mundo.add(m); meshes.push(m);
+        if (b.t !== 'base') {
+          var r = porTag[b.t] || (porTag[b.t] = { meshes: [], mn: [1e9, 1e9, 1e9], mx: [-1e9, -1e9, -1e9] });
+          r.meshes.push(m); for (var i = 0; i < 3; i++) { r.mn[i] = Math.min(r.mn[i], b.mn[i]); r.mx[i] = Math.max(r.mx[i], b.mx[i]); }
+        }
+      });
+      // pilhas de produto (cones com o tom do produto)
+      var pedra = new THREE.Color(0xb7ae9f), pilhas = [];
+      G.M.pilhas.forEach(function (q) {
+        if (q.nome === 'Pilha Pulmão' && q.r < 8) return;
+        var cor = pedra.clone().lerp(new THREE.Color(C.prod[q.nome] || '#999'), 0.28);
+        var g = new THREE.ConeGeometry(q.r, q.h, 48, 1, true); g.rotateX(Math.PI / 2);
+        var m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: cor, roughness: 1, flatShading: true }));
+        m.position.set(q.c[0], q.c[1], q.z0 + q.h / 2); m.userData = { pilha: q.nome, cor: cor.getHex() };
+        mundo.add(m); meshes.push(m);
+        pilhas.push({ nome: q.nome, mesh: m, pos: [q.c[0], q.c[1], q.z0 + q.h + 1.2] });
+        var r = porTag['§' + q.nome] = { meshes: [m], mn: [q.c[0] - q.r, q.c[1] - q.r, q.z0], mx: [q.c[0] + q.r, q.c[1] + q.r, q.z0 + q.h] };
+      });
+      // UH 01 sem geometria própria no modelo: marcador junto ao britador cônico
+      var uh = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 1.4), new THREE.MeshStandardMaterial({ color: 0x50504d, roughness: 0.7, flatShading: true }));
+      uh.position.set(77.6, 47.8, 0.7); uh.userData = { t: 'UH 01', cor: 0x50504d }; mundo.add(uh); meshes.push(uh);
+      porTag['UH 01'] = { meshes: [uh], mn: [76.5, 47.1, 0], mx: [78.7, 48.5, 1.4] };
+      // o arranjo Tekla traz apenas a base do britador cônico: corpo representado de forma esquemática sobre ela
+      var bcG = new THREE.LatheGeometry([[0, 0], [1.15, 0], [1.15, 1.35], [1.0, 1.55], [0.62, 2.35], [0.85, 2.6], [0.85, 2.95], [0, 2.95]].map(function (q) { return new THREE.Vector2(q[0], q[1]); }), 40);
+      bcG.rotateX(Math.PI / 2);
+      var bc = new THREE.Mesh(bcG, new THREE.MeshStandardMaterial({ color: 0x5a5a56, roughness: 0.6, metalness: 0.2, flatShading: true, side: THREE.DoubleSide }));
+      bc.position.set(75.1, 42.65, 4.1); bc.userData = { t: 'BC 01', cor: 0x5a5a56 }; mundo.add(bc); meshes.push(bc);
+      if (porTag['BC 01']) { porTag['BC 01'].meshes.push(bc); porTag['BC 01'].mx[2] = Math.max(porTag['BC 01'].mx[2], 7.1); }
+
+      // rótulos HTML
+      var lbl = $('p3lbl'), rotulos = [], mostraRot = true;
+      Object.keys(porTag).forEach(function (t) {
+        var r = porTag[t], isP = t.charAt(0) === '§';
+        var c = [(r.mn[0] + r.mx[0]) / 2, (r.mn[1] + r.mx[1]) / 2, r.mx[2] + 1.2];
+        if (/^TC/.test(t)) { var L = G.M.tcs[t]; if (L) c = [(L.a[0] + L.b[0]) / 2, (L.a[1] + L.b[1]) / 2, (L.a[2] + L.b[2]) / 2 + 1.5]; }
+        r.c = c;
+        var el = document.createElement('a'); el.href = 'javascript:void 0'; el.className = 'p3-tag' + (isP ? ' pil' : /^TC/.test(t) ? ' tc' : '');
+        el.textContent = isP ? t.slice(1) : t; el.dataset.t = t; lbl.appendChild(el);
+        if (isP) el.style.borderColor = C.prod[t.slice(1)] || '#999';
+        rotulos.push({ el: el, p: v3(c) });
+      });
+
+      function centro(r) { return v3([(r.mn[0] + r.mx[0]) / 2, (r.mn[1] + r.mx[1]) / 2, (r.mn[2] + r.mx[2]) / 2]); }
+      var HOME = { pos: new THREE.Vector3(cx - 36, 92, 66), alvo: new THREE.Vector3(cx + 2, 0, -cy + 4) };
+      cam.position.copy(HOME.pos); ctl.target.copy(HOME.alvo); ctl.update();
+      var voo = null;
+      function voa(pos, alvo) { voo = { t0: performance.now(), d: 1100, p0: cam.position.clone(), a0: ctl.target.clone(), p1: pos, a1: alvo }; }
+      function foca(t) {
+        var r = porTag[t]; if (!r) return;
+        var alvo = centro(r), tam = Math.max(r.mx[0] - r.mn[0], r.mx[1] - r.mn[1], r.mx[2] - r.mn[2]);
+        var dist = Math.max(10, tam * 1.35 + 6);
+        var dir = cam.position.clone().sub(ctl.target); dir.y = 0; if (dir.lengthSq() < 1) dir.set(-1, 0, 1); dir.normalize();
+        voa(alvo.clone().add(dir.multiplyScalar(dist * 0.82)).add(new THREE.Vector3(0, dist * 0.62, 0)), alvo);
+      }
+      var sel = null;
+      function seleciona(t) {
+        sel = t; colore();
+        if (!t) { side.innerHTML = ladoGeral(); voa(HOME.pos.clone(), HOME.alvo.clone()); }
+        else { side.innerHTML = t.charAt(0) === '§' ? ladoPilha(t.slice(1)) : (st[t] ? ladoEquip(t) : '<h3>' + esc(t) + '</h3>'); foca(t); }
+        chao.material.opacity = (t === 'CV 01') ? 0.35 : 1; chao.material.depthWrite = t !== 'CV 01';
+        bindLado();
+      }
+      function bindLado() {
+        side.querySelectorAll('[data-t]').forEach(function (el) { el.onclick = function () { seleciona(el.dataset.t); }; });
+        if (window.innerWidth < 900 && sel) cv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      side.querySelectorAll('[data-t]').forEach(function (el) { el.onclick = function () { seleciona(el.dataset.t); }; });
+
+      var BR = new THREE.Color(C.brand), RAMP0 = new THREE.Color(0xe8e6e0), RAMP1 = new THREE.Color(0xc4302b), OK = new THREE.Color(0x1baf7a);
+      function colore() {
+        var vals = {}, mx = 0;
+        if (modo !== 'neutro') Object.keys(porTag).forEach(function (t) { if (t.charAt(0) !== '§') { vals[t] = valor(t); mx = Math.max(mx, vals[t]); } });
+        meshes.forEach(function (m) {
+          var u = m.userData, t = u.t || (u.pilha ? '§' + u.pilha : null), c;
+          if (modo === 'neutro' || !t || t.charAt(0) === '§') c = new THREE.Color(u.cor);
+          else if (t === 'base') c = new THREE.Color(0xdedbd3);
+          else { var v = vals[t] || 0; c = v > 0 ? RAMP0.clone().lerp(RAMP1, 0.25 + 0.75 * v / (mx || 1)) : OK.clone().lerp(RAMP0, 0.35); }
+          if (modo !== 'neutro' && t === 'base') { m.material.transparent = true; m.material.opacity = 0.55; } else { m.material.transparent = false; m.material.opacity = 1; }
+          m.material.color.copy(c);
+          m.material.emissive.set(sel && t === sel ? BR : 0x000000); m.material.emissiveIntensity = sel && t === sel ? 0.55 : 0;
+        });
+        rotulos.forEach(function (r) { r.el.classList.toggle('on', r.el.dataset.t === sel); });
+        var leg = $('p3leg');
+        leg.innerHTML = modo === 'neutro' ? '' : '<span><i style="background:#1baf7a"></i>sem registro</span><span><i style="background:linear-gradient(90deg,#e4c9c3,#c4302b)"></i>' + (modo === 'f' ? 'mais falhas' : 'mais horas paradas') + (mx ? ' (máx. ' + (modo === 'f' ? mx : f1(mx) + ' h') + ')' : '') + '</span>';
+      }
+      V = { colore: colore };
+      colore();
+
+      // seleção por clique / toque (ignora arrasto)
+      var ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), down = null;
+      renderer.domElement.addEventListener('pointerdown', function (e) { down = [e.clientX, e.clientY]; });
+      renderer.domElement.addEventListener('pointerup', function (e) {
+        if (!down || Math.abs(e.clientX - down[0]) + Math.abs(e.clientY - down[1]) > 6) return;
+        var rc = renderer.domElement.getBoundingClientRect();
+        ptr.set((e.clientX - rc.left) / rc.width * 2 - 1, -(e.clientY - rc.top) / rc.height * 2 + 1);
+        ray.setFromCamera(ptr, cam);
+        var hit = ray.intersectObjects(meshes, false).filter(function (h) { return h.object.material.opacity > 0.9 || h.object.userData.t !== 'base'; })[0];
+        var u = hit ? hit.object.userData : null;
+        var t = u ? (u.pilha ? '§' + u.pilha : u.t) : null;
+        seleciona(t && t !== 'base' ? t : null);
+      });
+      lbl.addEventListener('click', function (e) { var t = e.target.dataset && e.target.dataset.t; if (t) seleciona(t); });
+      $('p3home').onclick = function () { seleciona(null); };
+      $('p3rot').onclick = function () { mostraRot = !mostraRot; lbl.style.display = mostraRot ? '' : 'none'; this.classList.toggle('on', !mostraRot); };
+
+      function tamanho() { W = cv.clientWidth; H = cv.clientHeight; renderer.setSize(W, H); cam.aspect = W / H; cam.updateProjectionMatrix(); }
+      window.addEventListener('resize', tamanho);
+      var tmp = new THREE.Vector3();
+      function quadro(now) {
+        if (!document.body.contains(cv)) { window.removeEventListener('resize', tamanho); renderer.dispose(); meshes.forEach(function (m) { m.material.dispose(); }); return; }
+        requestAnimationFrame(quadro);
+        if (voo) {
+          var k = Math.min(1, (now - voo.t0) / voo.d), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+          cam.position.lerpVectors(voo.p0, voo.p1, e); ctl.target.lerpVectors(voo.a0, voo.a1, e); if (k >= 1) voo = null;
+        }
+        ctl.update(); renderer.render(scene, cam);
+        if (mostraRot) {
+          var dCam = cam.position.distanceTo(ctl.target);
+          rotulos.forEach(function (r) {
+            tmp.copy(r.p).project(cam);
+            var vis = tmp.z < 1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05;
+            var tc = r.el.classList.contains('tc');
+            if (tc && dCam > 105 && r.el.dataset.t !== sel) vis = false;
+            r.el.style.display = vis ? '' : 'none';
+            if (vis) r.el.style.transform = 'translate(' + ((tmp.x + 1) / 2 * W).toFixed(1) + 'px,' + ((1 - tmp.y) / 2 * H).toFixed(1) + 'px) translate(-50%,-100%)';
+          });
+        }
+      }
+      requestAnimationFrame(quadro);
+      return V;
+    }
+  }
+
   window.addEventListener('hashchange', route);
 
   // =====================================================================

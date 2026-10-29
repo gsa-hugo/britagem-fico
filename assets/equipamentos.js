@@ -1,4 +1,5 @@
 /* Catálogo técnico dos equipamentos. Fonte: manuais IMIC do projeto "Manutenção Britagem".
+   Vínculo TAG × modelo das peneiras conferido no fluxograma AMB003-02-2115-FL-M-0002 e no arranjo AMB003-02-2115-DS-M-0001.
    Para corrigir um TAG ou modelo, edite somente este arquivo. */
 window.EQUIP = {
   ordem: ['AL 01', 'BM 01', 'PN 01', 'TC 01', 'TC 01A', 'TC 11', 'TC 12', 'TC 13', 'BC 01', 'PN 02', 'PN 03', 'CV 01', 'UH 01', 'TC 02', 'TC 03', 'TC 04', 'TC 05', 'TC 06', 'TC 07', 'TC 08', 'TC 09', 'TC 10', 'BA 01', 'PLC', 'Geral'],
@@ -47,15 +48,15 @@ window.EQUIP = {
       pecas: [['Sobressalentes de fornecimento', 'Anel de enchimento médio · eixo principal + cone (montado) · manta A']],
       rotina: ['Diário: folgas dos revestimentos superiores da carcaça', 'Limpar filtro de retorno e filtro de sucção da bomba de lubrificação', 'Trocar bucha da aranha a cada troca de revestimentos']
     },
-    'PN 01': {
-      modelo: 'IMIC PV 50020 2D Scalper (óleo)', manual: 'Manual de Instruções PV 50020 2D - Scalper - A Óleo Des. 53793', aviso: 'Vínculo TAG × modelo assumido (PN 01 e PN 02 são 2D). Confirmar em campo.',
+    'PN 02': {
+      modelo: 'IMIC PV 50020 2D Scalper (óleo)', manual: 'Manual de Instruções PV 50020 2D - Scalper - A Óleo Des. 53793',
       specs: [['Acionamento', 'Motor 30 cv, 8 polos, cardã MB 1113 500 mm'], ['Vibrador', 'AC-034120-000 a óleo, 2 × 22332 CCJA/W33VA405'], ['Deck', '2 decks · área 10 m² · telas de 1/8" a 4"'], ['Amplitude', 'Movimento circular de 4 a 10 mm'], ['Molas', '12 × F28,6 × DI145 × DE202,2 × A305']],
       lub: [['Óleo do vibrador', 'CLP ISO VG 320 sintético, 11 L. 1ª troca com 50 h; depois 700 h ou 60 dias'], ['Labirintos', 'Graxa lítio EP NLGI 3, 50 g por labirinto a cada 50 h'], ['Temperatura', 'Mancais ≤ ambiente + 60 °C']],
       pecas: [['Rolamento do vibrador', '04797 · 22332 (2)'], ['Retentor', '01444 (trocar a cada 6 meses)'], ['Mancal dir./esq.', 'S1-008963-000'], ['Molas', '30095 (1 jogo)'], ['Cardã', '01532'], ['Telas', '2 jogos (referência)']],
       rotina: ['Diário: ruído e temperatura dos mancais', '50 h: fixação das telas, livre movimento, acúmulo sob a peneira', '200 h: reaperto dos parafusos do vibrador', 'Teste dos cartões de amplitude nos 4 cantos (velocidade crítica)']
     },
-    'PN 02': {
-      modelo: 'IMIC PV 30012 2D Scalper (graxa)', manual: 'Manual de Instruções - Peneira Vibratória PV 30012 - 2D - Des. 53903', aviso: 'Vínculo TAG × modelo assumido (PN 01 e PN 02 são 2D). Confirmar em campo.',
+    'PN 01': {
+      modelo: 'IMIC PV 30012 2D Scalper (graxa)', manual: 'Manual de Instruções - Peneira Vibratória PV 30012 - 2D - Des. 53903',
       specs: [['Acionamento', 'Motor 20 cv, 8 polos, cardã 1113 × 530 mm'], ['Vibrador', 'AC-006282-000 a graxa, 2 × 22324 CCJA/W33VA405'], ['Deck', '2 decks · área 3,6 m² · telas de 30 mesh a 4"'], ['Molas', '4 × F31,75 × DI145 × DE208,4 × A305']],
       lub: [['Mancais', 'Graxa lítio EP NLGI 3, 180 g por mancal a cada 50 h'], ['Labirintos', '40 g por labirinto'], ['Temperatura', 'Mancais ≤ ambiente + 60 °C']],
       pecas: [['Rolamento do vibrador', '03733 · 22324 (2)'], ['Mancal do rolamento', 'S1-006179-000 (2)'], ['Tampa do mancal', 'S1-006180-000 (2)'], ['Labirinto', 'S1-006178-000 (2)'], ['Molas', '01413 (1 jogo)'], ['Cardã', '01532']],
