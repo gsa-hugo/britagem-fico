@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Britagem de Agregados · Painel de Operação e Manutenção · GSA Service</title>
+<link rel="icon" href="assets/logo-color.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side">
+    <div class="logo"><img src="assets/logo-white.png" alt="GSA Service"><small>Planta de Britagem · Contrato Vale</small></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot" id="sideFoot"></div>
+  </aside>
+  <div class="scrim" onclick="document.getElementById('app').classList.remove('open')"></div>
+  <div class="main">
+    <header class="top">
+      <button class="burger" aria-label="Menu" onclick="document.getElementById('app').classList.toggle('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div><h1 id="pgTitle">Visão Geral</h1><div class="sub" id="pgSub"></div></div>
+      <div class="grow"></div>
+      <div class="filters" id="periodo"></div>
+    </header>
+    <main class="content" id="view"></main>
+    <footer class="ft"><span id="ftInfo"></span><span>Painel estático gerado a partir do controle diário de produção. Somente leitura. · <a href="atualizar.html">Área de atualização</a></span></footer>
+  </div>
+</div>
+<script src="assets/echarts.min.js"></script>
+<script src="assets/equipamentos.js"></script>
+<script src="dados/dados.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
